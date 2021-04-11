@@ -6,34 +6,33 @@ import System.IO
 import System.Environment
 import Data.Char
 import Data.List
+import Data.Maybe
+import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Text.Printf
 
 
 data FSM = FSM {
     states :: States,
     alphabet :: Set.Set InChar,
-    transitions :: [Transition],
+    transitions :: Transitions,
     initial :: State,
     final :: States
 } deriving (Eq)
 instance Show FSM where
     show (FSM s a t i f) =
-        intercalate "," (map ((:[]) . intToDigit) (Set.toList s)) ++ "\n" ++
-        concat a ++ "\n" ++
-        [intToDigit i] ++ "\n" ++
-        intercalate "," (map ((:[]) . intToDigit) (Set.toList f)) ++ "\n" ++
-        intercalate "" (map show t)
+        intercalate "," (map ((:[]) . intToDigit) (Set.toList s)) ++ "\n"
+        ++ concat a ++ "\n"
+        ++ [intToDigit i] ++ "\n"
+        ++ intercalate "," (map ((:[]) . intToDigit) (Set.toList f)) ++ "\n"
+        ++ intercalate "\n" (transitionsStringify t)
 
 type State = Int
 type States = Set.Set State
 type InChar = String
-data Transition = Transition {
-    from :: State,
-    to :: State,
-    via :: Char
-} deriving (Eq)
-instance Show Transition where
-    show (Transition f t v) = [intToDigit f] ++ "," ++ [v] ++ "," ++ [intToDigit t] ++ "\n"
+type Transition = (State, Char, State)
+type StateTransition = Map.Map Char State
+type Transitions = Map.Map State StateTransition
 
 
 main :: IO ()
@@ -46,8 +45,10 @@ main = do
     if not minimalize then
         print fsm
     else do
-        -- let cleanFsm = eliminateUnreachableStates fsm
-        print "hello"
+        -- let cleanFSM = removeUnreachable fsm
+        -- let fullFSM = addSink cleanFSM
+        -- let minimalFSM = minimize fullFSM
+        print $ minimize fsm
 
 handleArgs :: [String] -> (Bool, String)
 handleArgs [x]
@@ -72,7 +73,9 @@ getFile filename
 parseFSM :: String -> FSM
 parseFSM input = do
     let lns = lines input
-    parseFSMLines lns
+    if length lns < 4 then error "invalid input"
+    else
+        parseFSMLines lns
 
 parseFSMLines :: [String] -> FSM
 parseFSMLines (s:a:i:f:ts) = FSM {
@@ -80,7 +83,7 @@ parseFSMLines (s:a:i:f:ts) = FSM {
                                 alphabet = Set.fromList $ map (:[]) a,
                                 initial = digitToInt $ stringToChar i,
                                 final = Set.fromList $ map (digitToInt . stringToChar) (commaSplit f),
-                                transitions = map parseTransition (filter (not . null) ts)
+                                transitions = createTransitions $ map parseTransition (filter (not . null) ts)
                             }
 
 commaSplit :: String -> [String]
@@ -100,14 +103,43 @@ stringToChar cs = if not (null (tail cs)) then
                     head cs
 
 parseTransition :: String -> Transition
-parseTransition x = Transition
-                            {
-                                from = digitToInt $ stringToChar $ head $ commaSplit x,
-                                to = digitToInt $ stringToChar $ head $ tail $ tail $ commaSplit x,
-                                via = head $ head $ tail $ commaSplit x
-                            }
+parseTransition x = (
+                        digitToInt fromCh,
+                        via,
+                        digitToInt toCh
+                    )
+    where
+        fromCh = stringToChar $ head $ commaSplit x
+        via = head $ head $ tail $ commaSplit x
+        toCh = stringToChar $ head $ tail $ tail $ commaSplit x
+
+createTransitions :: [Transition] -> Transitions
+createTransitions transitionsList = createTransitionsMap $ map transitionToStateTransitionTuple transitionsList
+
+transitionToStateTransitionTuple :: Transition -> (State, StateTransition)
+transitionToStateTransitionTuple (from, via, to) = (from, Map.fromList [(via, to)])
+
+createTransitionsMap :: [(State, StateTransition)] -> Transitions
+createTransitionsMap [t] = Map.fromList [t]
+createTransitionsMap ((via,stateTransition):ts) = Map.insertWith Map.union via stateTransition (createTransitionsMap ts)
+
+--------------------------------------------------
+-- print
+--------------------------------------------------
+transitionsStringify :: Transitions -> [String]
+transitionsStringify transitions = map transitionStringify $ concatMap stateTransitionTupleToTransition (Map.assocs transitions)
+
+transitionStringify :: Transition -> String
+transitionStringify (from, via, to) = printf "%d,%c,%d" from via to
+
+stateTransitionTupleToTransition :: (State, StateTransition) -> [Transition]
+stateTransitionTupleToTransition (from, ts) = map st (Map.assocs ts)
+    where st (via, to) = (from, via, to)
 
 
 --------------------------------------------------
--- parse input and construct FSM
+-- minimize
 --------------------------------------------------
+minimize :: FSM -> FSM
+minimize fsm = do
+    fsm
