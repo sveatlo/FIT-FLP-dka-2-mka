@@ -1,6 +1,6 @@
 .PHONY: all
 all:
-	ghc src/main.hs -o ./main
+	ghc src/main.hs -o ./dka-2-mka
 
 .PHONY: zip
 zip: clean
@@ -8,4 +8,4 @@ zip: clean
 
 .PHONY: clean
 clean:
-	rm -rf src/main src/main.o src/main.hi ./main
+	rm -rf src/main src/*.hi src/*.o ./dka-2-mka
